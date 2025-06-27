@@ -3,39 +3,75 @@ from seleniumbase import BaseCase
 
 class OLXScraper(BaseCase):
     def test_scrape_olx_laptops(self):
-        # Fraza wyszukiwania
         search_query = "laptop lenovo"
-        url = f"https://www.olx.pl/oferty/q-{search_query.replace(' ', '-')}/"
+        base_url = f"https://www.olx.pl/oferty/q-{search_query.replace(' ', '-')}/"
+        page = 1
+        all_data = []
+        last_titles = set()
 
-        self.open(url)
+        while True:
+            url = base_url if page == 1 else f"{base_url}?page={page}"
+            print(f"\n🌐 Strona {page}: {url}")
+            self.open(url)
 
-        self.wait_for_element('[data-cy="l-card"]', timeout=30)
-        offers = self.find_elements('[data-cy="l-card"]')
-
-        # print(f"\nZnaleziono ofert: {len(offers)}\n")
-
-        scraped_data = []
-
-        for offer in offers:
             try:
-                title = offer.find_element("css selector", 'div[data-cy="ad-card-title"] h4').text
-                price = offer.find_element("css selector", 'p[data-testid="ad-price"]').text
-                location = offer.find_element("css selector", 'p[data-testid="location-date"]').text
-                
-                # print(f"📌 {title} | 💵 {price} | 📍 {location}")
+                self.wait_for_element('[data-cy="l-card"]', timeout=5)
+            except Exception:
+                print("❌ Brak wyników lub koniec stron.")
+                break
 
-                data = {
-                    "title": title,
-                    "price": price,
-                    "location_date": location
-                }
+            offers = self.find_elements('[data-cy="l-card"]')
+            if not offers:
+                print("❌ Brak ogłoszeń na stronie.")
+                break
 
-                scraped_data.append(data)
+            current_titles = set()
+            page_data = []
 
-            except Exception as e:
-                print("⚠️ Błąd przy parsowaniu ogłoszenia:", e)
+            for offer in offers:
+                try:
+                    title = offer.find_element(
+                        "css selector", 'div[data-cy="ad-card-title"] h4'
+                    ).text
 
-            with open("olx_laptops.json", "w", encoding="utf-8") as f:
-                json.dump(scraped_data, f, ensure_ascii=False, indent=4)
+                    price = offer.find_element(
+                        "css selector", 'p[data-testid="ad-price"]'
+                    ).text
 
-            print("\n✅ Dane zapisane do pliku olx_laptops.json")
+                    location = offer.find_element(
+                        "css selector", 'p[data-testid="location-date"]'
+                    ).text
+
+                    link_element = offer.find_element(
+                        "css selector", 'a[href^="/d/oferta/"]'
+                    )
+                    
+                    href = link_element.get_attribute("href")
+                    link = href if href.startswith("http") else f"https://www.olx.pl{href}"
+
+
+                    current_titles.add(title)
+
+                    page_data.append({
+                        "title": title,
+                        "price": price,
+                        "location_date": location,
+                        "link": link
+                    })
+
+                except Exception as e:
+                    print("⚠️ Błąd przy ogłoszeniu:", e)
+
+            if current_titles == last_titles:
+                print("🚫 Powtórzone dane — koniec stron.")
+                break
+
+            last_titles = current_titles
+            all_data.extend(page_data)
+            print(f"✅ Zebrano {len(page_data)} ogłoszeń z tej strony.")
+            page += 1
+
+        with open("olx_laptopsAll.json", "w", encoding="utf-8") as f:
+            json.dump(all_data, f, ensure_ascii=False, indent=4)
+
+        print(f"\n✅ Zapisano {len(all_data)} ogłoszeń do olx_laptopsALL.json")
