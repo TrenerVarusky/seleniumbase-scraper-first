@@ -1,4 +1,5 @@
-import json
+import csv
+import re
 from seleniumbase import BaseCase
 
 class OLXScraper(BaseCase):
@@ -15,7 +16,7 @@ class OLXScraper(BaseCase):
             self.open(url)
 
             try:
-                self.wait_for_element('[data-cy="l-card"]', timeout=5)
+                self.wait_for_element('[data-cy="l-card"]', timeout=10)
             except Exception:
                 print("❌ Brak wyników lub koniec stron.")
                 break
@@ -34,9 +35,10 @@ class OLXScraper(BaseCase):
                         "css selector", 'div[data-cy="ad-card-title"] h4'
                     ).text
 
-                    price = offer.find_element(
+                    price_text = offer.find_element(
                         "css selector", 'p[data-testid="ad-price"]'
                     ).text
+                    price_num = int(re.sub(r"[^\d]", "", price_text))
 
                     location = offer.find_element(
                         "css selector", 'p[data-testid="location-date"]'
@@ -49,12 +51,11 @@ class OLXScraper(BaseCase):
                     href = link_element.get_attribute("href")
                     link = href if href.startswith("http") else f"https://www.olx.pl{href}"
 
-
                     current_titles.add(title)
 
                     page_data.append({
                         "title": title,
-                        "price": price,
+                        "price": price_num,
                         "location_date": location,
                         "link": link
                     })
@@ -71,7 +72,15 @@ class OLXScraper(BaseCase):
             print(f"✅ Zebrano {len(page_data)} ogłoszeń z tej strony.")
             page += 1
 
-        with open("olx_laptopsAll.json", "w", encoding="utf-8") as f:
-            json.dump(all_data, f, ensure_ascii=False, indent=4)
+        # Sortuj po cenie
+        sorted_data = sorted(all_data, key=lambda x: x["price"])
 
-        print(f"\n✅ Zapisano {len(all_data)} ogłoszeń do olx_laptopsALL.json")
+        # Zapisz do CSV
+        with open("olx_laptops_sorted.csv", "w", encoding="utf-8", newline="") as csvfile:
+            fieldnames = ["title", "price", "location_date", "link"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in sorted_data:
+                writer.writerow(row)
+
+        print(f"\n✅ Zapisano {len(sorted_data)} ogłoszeń do olx_laptops_sorted.csv")
